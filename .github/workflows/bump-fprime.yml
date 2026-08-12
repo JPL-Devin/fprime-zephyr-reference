@@ -25,7 +25,7 @@ jobs:
 
       - name: "Bump F´ submodule"
         id: bump
-        uses: JPL-Devin/fprime-actions/bump-fprime-submodule@auto/fprime-submodule-bump
+        uses: nasa/fprime-actions/bump-fprime-submodule@devel
         with:
           fprime-path: lib/fprime
           fprime-repository: nasa/fprime
@@ -34,13 +34,19 @@ jobs:
 
       - name: "Make Space"
         if: steps.bump.outputs.bumped == 'true'
-        uses: JPL-Devin/fprime-actions/make-space@auto/fprime-submodule-bump
+        uses: nasa/fprime-actions/make-space@devel
 
       - name: "Install build dependencies"
         if: steps.bump.outputs.bumped == 'true'
         run: |
-          python3 -m pip install -r requirements.txt
-          python3 -m pip install git+https://github.com/fprime-community/fprime-ci@devel
+          python3 -m venv ci-venv
+          . ci-venv/bin/activate
+          pip install -U setuptools pip wheel
+          echo "PATH=${GITHUB_WORKSPACE}/ci-venv/bin:$PATH" >> "$GITHUB_ENV"
+          echo "VIRTUAL_ENV=${GITHUB_WORKSPACE}/ci-venv" >> "$GITHUB_ENV"
+          pip install -r ./lib/fprime/requirements.txt
+          pip install -r ./requirements.txt
+          pip install git+https://github.com/fprime-community/fprime-ci@devel
 
       - name: "Build pinned F´ configuration"
         id: build
@@ -62,7 +68,7 @@ jobs:
 
       - name: "Open or update bump PR"
         if: steps.bump.outputs.bumped == 'true'
-        uses: JPL-Devin/fprime-actions/open-bump-pr@auto/fprime-submodule-bump
+        uses: nasa/fprime-actions/open-bump-pr@devel
         with:
           github-token: ${{ github.token }}
           branch: auto/bump-fprime
