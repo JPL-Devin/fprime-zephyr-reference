@@ -1,0 +1,74 @@
+name: "Bump F´ submodule"
+
+on:
+  push:
+    branches: [devel]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump:
+    name: "Bump, build, and open PR"
+    runs-on: ubuntu-22.04
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          persist-credentials: true
+
+      - name: "Bump F´ submodule"
+        id: bump
+        uses: JPL-Devin/fprime-actions/bump-fprime-submodule@auto/fprime-submodule-bump
+        with:
+          fprime-path: lib/fprime
+          fprime-repository: nasa/fprime
+          fprime-ref: devel
+          branch: auto/bump-fprime
+
+      - name: "Make Space"
+        if: steps.bump.outputs.bumped == 'true'
+        uses: JPL-Devin/fprime-actions/make-space@auto/fprime-submodule-bump
+
+      - name: "Install build dependencies"
+        if: steps.bump.outputs.bumped == 'true'
+        run: |
+          python3 -m pip install -r requirements.txt
+          python3 -m pip install git+https://github.com/fprime-community/fprime-ci@devel
+
+      - name: "Build pinned F´ configuration"
+        id: build
+        if: steps.bump.outputs.bumped == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          CCACHE_DISABLE=1 fprime-ci -c ./lib/fprime-zephyr/ci/sample-configs/pico2.yml --add-stage build
+          pico_status=$?
+          CCACHE_DISABLE=1 fprime-ci -c ./lib/fprime-zephyr/ci/sample-configs/teensy41.yml --add-stage build
+          teensy_status=$?
+          if [ "$pico_status" -eq 0 ] && [ "$teensy_status" -eq 0 ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: "Open or update bump PR"
+        if: steps.bump.outputs.bumped == 'true'
+        uses: JPL-Devin/fprime-actions/open-bump-pr@auto/fprime-submodule-bump
+        with:
+          github-token: ${{ github.token }}
+          branch: auto/bump-fprime
+          base: devel
+          fprime-repository: nasa/fprime
+          build-result: ${{ steps.build.outputs.result }}
+          old-sha: ${{ steps.bump.outputs.old-sha }}
+          new-sha: ${{ steps.bump.outputs.new-sha }}
+          commit-count: ${{ steps.bump.outputs.commit-count }}
